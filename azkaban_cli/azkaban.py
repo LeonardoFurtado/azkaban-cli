@@ -33,7 +33,8 @@ from azkaban_cli.exceptions import (
     FetchExecutionsOfAFlowError,
     FetchExecutionJobsLogError,
     ResumeFlowExecutionError,
-    FetchRunningExecutionsOfAFlowError
+    FetchRunningExecutionsOfAFlowError,
+    PauseAFlowExecutionError,
 )
 
 
@@ -50,7 +51,7 @@ class Azkaban(object):
         self.__session_id = None
 
     def __validate_host(self, host):
-        """ PRIVATE
+        """PRIVATE
         Receives a host and when the host ends with '/', will we return a host without the '/'.
         :param host:
         :return: host:
@@ -58,13 +59,13 @@ class Azkaban(object):
         """
         valid_host = host
 
-        while valid_host.endswith(u'/'):
+        while valid_host.endswith(u"/"):
             valid_host = valid_host[:-1]
 
         return valid_host
 
     def __check_if_logged(self):
-        """ PRIVATE
+        """PRIVATE
         Checks if the instance created has a valid session.
         :raise: NotLoggedOnError when __session_id not exists.
         """
@@ -72,45 +73,44 @@ class Azkaban(object):
             raise NotLoggedOnError()
 
     def __catch_login_html(self, response):
-        """ PRIVATE
+        """PRIVATE
         Checks the content in the verification is in at least one line of the response.
         :raise: SessionError when content not in response lines.
         """
-        if "  <script type=\"text/javascript\" src=\"/js/azkaban/view/login.js\"></script>" in \
-                response.text.splitlines():
+        if '  <script type="text/javascript" src="/js/azkaban/view/login.js"></script>' in response.text.splitlines():
             raise SessionError(response.text)
 
     def __catch_response_status_error(self, exception, response_json):
-        """ PRIVATE
+        """PRIVATE
         Verify error in response, catch response status.
         :raise: exception(error_msg), when error exists and status equals a error, with the 'error_msg'.
         """
-        response_status = response_json.get('status')
-        if response_status == u'error':
-            error_msg = response_json[u'message']
+        response_status = response_json.get("status")
+        if response_status == u"error":
+            error_msg = response_json[u"message"]
             raise exception(error_msg)
 
     def __catch_response_error_msg(self, exception, response_json):
-        """ PRIVATE
+        """PRIVATE
         Catches the error message when 'error' exists in the response keys.
         :raise: SessionError, when error_msg equals a 'sessions', or exception(error_msg).
         """
-        if u'error' in response_json.keys():
-            error_msg = response_json[u'error']
+        if u"error" in response_json.keys():
+            error_msg = response_json[u"error"]
             if error_msg == "session":
                 raise SessionError(error_msg)
             raise exception(error_msg)
 
     def __catch_empty_response(self, exception, response_json):
-        """ PRIVATE
+        """PRIVATE
         Does not allow an empty response.
         :raise: exception
         """
         if response_json == {}:
-            raise exception('Empty response')
+            raise exception("Empty response")
 
     def __catch_login_text(self, response):
-        """ PRIVATE
+        """PRIVATE
         Do not allow an empty login attempt.
         :raise: SessionError("Login error. Need username and password")
         """
@@ -118,14 +118,14 @@ class Azkaban(object):
             raise SessionError(response.text)
 
     def __catch_login(self, response):
-        """ PRIVATE
+        """PRIVATE
         Private method to call login_text and login_html from response.
         """
         self.__catch_login_text(response)
         self.__catch_login_html(response)
 
     def __catch_response_error(self, response, exception, ignore_empty_responses=False):
-        """ PRIVATE
+        """PRIVATE
         Try to get the answer json. If an error occurs, define response_json as an empty json, send it
         together with the input to the error functions.
         """
@@ -153,11 +153,7 @@ class Azkaban(object):
         :rtype: dict
         """
 
-        logged_session = {
-            u'host': self.__host,
-            u'user': self.__user,
-            u'session_id': self.__session_id
-        }
+        logged_session = {u"host": self.__host, u"user": self.__user, u"session_id": self.__session_id}
 
         return logged_session
 
@@ -201,9 +197,9 @@ class Azkaban(object):
         self.__catch_response_error(response, LoginError)
 
         response_json = response.json()
-        self.set_logged_session(valid_host, user, response_json['session.id'])
+        self.set_logged_session(valid_host, user, response_json["session.id"])
 
-        logging.info('Logged as %s' % (user))
+        logging.info("Logged as %s" % (user))
 
     def upload(self, path, project=None, zip_name=None):
         """
@@ -235,7 +231,7 @@ class Azkaban(object):
             zip_name = project
 
         try:
-            zip_path = make_archive(zip_name, 'zip', path)
+            zip_path = make_archive(zip_name, "zip", path)
         except FileNotFoundError as e:
             raise UploadError(str(e))
 
@@ -247,7 +243,7 @@ class Azkaban(object):
         self.__catch_response_error(response, UploadError)
 
         response_json = response.json()
-        logging.info('Project %s updated to version %s' % (project, response_json[u'version']))
+        logging.info("Project %s updated to version %s" % (project, response_json[u"version"]))
 
     def schedule(self, project, flow, cron, **execution_options):
         """
@@ -270,20 +266,14 @@ class Azkaban(object):
         execution_options = {k: v for (k, v) in execution_options.items() if v}
 
         response = api.schedule_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            flow,
-            cron,
-            **execution_options
+            self.__session, self.__host, self.__session_id, project, flow, cron, **execution_options
         )
 
         self.__catch_response_error(response, ScheduleError)
 
         response_json = response.json()
-        logging.info(response_json[u'message'])
-        logging.info('scheduleId: %s' % (response_json[u'scheduleId']))
+        logging.info(response_json[u"message"])
+        logging.info("scheduleId: %s" % (response_json[u"scheduleId"]))
 
     def fetch_flows(self, project):
         """
@@ -301,17 +291,12 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_flows_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project
-        )
+        response = api.fetch_flows_request(self.__session, self.__host, self.__session_id, project)
 
         self.__catch_response_error(response, FetchFlowsError)
 
         response_json = response.json()
-        logging.info('Project ID: %s' % (response_json[u'projectId']))
+        logging.info("Project ID: %s" % (response_json[u"projectId"]))
         return response_json
 
     def fetch_jobs_from_flow(self, project, flow):
@@ -331,13 +316,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_jobs_from_flow_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            flow
-        )
+        response = api.fetch_jobs_from_flow_request(self.__session, self.__host, self.__session_id, project, flow)
 
         self.__catch_response_error(response, FetchJobsFromFlowError)
 
@@ -360,18 +339,12 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_schedule_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project_id,
-            flow
-        )
+        response = api.fetch_schedule_request(self.__session, self.__host, self.__session_id, project_id, flow)
 
         self.__catch_response_error(response, FetchScheduleError)
 
         response_json = response.json()
-        logging.info('Schedule ID: %s' % (response_json[u'schedule'][u'scheduleId']))
+        logging.info("Schedule ID: %s" % (response_json[u"schedule"][u"scheduleId"]))
         return response_json
 
     def unschedule(self, schedule_id):
@@ -390,17 +363,12 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.unschedule_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            schedule_id
-        )
+        response = api.unschedule_request(self.__session, self.__host, self.__session_id, schedule_id)
 
         self.__catch_response_error(response, UnscheduleError)
 
         response_json = response.json()
-        logging.info(response_json[u'message'])
+        logging.info(response_json[u"message"])
 
     def execute(self, project, flow, **execution_options):
         """
@@ -421,18 +389,13 @@ class Azkaban(object):
         execution_options = {k: v for (k, v) in execution_options.items() if v}
 
         response = api.execute_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            flow,
-            **execution_options
+            self.__session, self.__host, self.__session_id, project, flow, **execution_options
         )
 
         self.__catch_response_error(response, ExecuteError)
 
         response_json = response.json()
-        logging.info('%s' % (response_json[u'message']))
+        logging.info("%s" % (response_json[u"message"]))
 
     def cancel(self, execution_id):
         """
@@ -471,17 +434,11 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.create_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            description
-        )
+        response = api.create_request(self.__session, self.__host, self.__session_id, project, description)
 
         self.__catch_response_error(response, CreateError)
 
-        logging.info('Project %s created successfully' % (project))
+        logging.info("Project %s created successfully" % (project))
 
     def delete(self, project):
         """
@@ -495,12 +452,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        api.delete_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project
-        )
+        api.delete_request(self.__session, self.__host, self.__session_id, project)
 
         # The delete request does not return any message
 
@@ -512,11 +464,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_projects_request(
-            self.__session,
-            self.__host,
-            self.__session_id
-        )
+        response = api.fetch_projects_request(self.__session, self.__host, self.__session_id)
 
         # The fetch projects request returns an html content, so we only catch login errors
         self.__catch_login(response)
@@ -540,17 +488,15 @@ class Azkaban(object):
         permission_options = self.__check_group_permissions(permission_options)
 
         response = api.add_permission_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            group,
-            permission_options
+            self.__session, self.__host, self.__session_id, project, group, permission_options
         )
 
         self.__catch_response_error(response, AddPermissionError, True)
 
-        logging.info('Group [%s] add with permission [%s] in the Project [%s] successfully' % (group,  permission_options, project))
+        logging.info(
+            "Group [%s] add with permission [%s] in the Project [%s] successfully"
+            % (group, permission_options, project)
+        )
 
     def remove_permission(self, project, group):
         """
@@ -565,17 +511,11 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.remove_permission_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            group
-        )
+        response = api.remove_permission_request(self.__session, self.__host, self.__session_id, project, group)
 
         self.__catch_response_error(response, RemovePermissionError, True)
 
-        logging.info('Group [%s] permission removed from the Project [%s] successfully' % (group, project))
+        logging.info("Group [%s] permission removed from the Project [%s] successfully" % (group, project))
 
     def change_permission(self, project, group, permission_options):
         """
@@ -594,17 +534,15 @@ class Azkaban(object):
         permission_options = self.__check_group_permissions(permission_options)
 
         response = api.change_permission_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            project,
-            group,
-            permission_options
+            self.__session, self.__host, self.__session_id, project, group, permission_options
         )
 
         self.__catch_response_error(response, ChangePermissionError, True)
 
-        logging.info('Group [%s] AAA received new permissions [%s] in the Project [%s] successfully' % (group, permission_options, project))
+        logging.info(
+            "Group [%s] AAA received new permissions [%s] in the Project [%s] successfully"
+            % (group, permission_options, project)
+        )
 
     def fetch_sla(self, schedule_id):
         """
@@ -616,12 +554,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_sla_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            schedule_id
-        )
+        response = api.fetch_sla_request(self.__session, self.__host, self.__session_id, schedule_id)
 
         self.__catch_response_error(response, FetchSLAError)
 
@@ -648,18 +581,19 @@ class Azkaban(object):
             option: permission_options[option] if option in permission_options else False for option in __options
         }
 
-        have_declared_options = \
-            filled_permission_options['admin'] and \
-            filled_permission_options['read'] and \
-            filled_permission_options['write'] and \
-            filled_permission_options['execute'] and \
-            filled_permission_options['schedule']
+        have_declared_options = (
+            filled_permission_options["admin"]
+            and filled_permission_options["read"]
+            and filled_permission_options["write"]
+            and filled_permission_options["execute"]
+            and filled_permission_options["schedule"]
+        )
 
-        if filled_permission_options['admin']:
+        if filled_permission_options["admin"]:
             filled_permission_options = {option: True for option in filled_permission_options}
 
         elif not have_declared_options:
-            filled_permission_options['read'] = True
+            filled_permission_options["read"] = True
 
         return filled_permission_options
 
@@ -679,12 +613,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
 
-        response = api.fetch_flow_execution_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            execution_id
-        )
+        response = api.fetch_flow_execution_request(self.__session, self.__host, self.__session_id, execution_id)
 
         self.__catch_response_error(response, FetchFlowExecutionError)
 
@@ -711,11 +640,7 @@ class Azkaban(object):
         self.__check_if_logged()
 
         response = api.fetch_flow_execution_updates_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            execution_id,
-            last_update_time
+            self.__session, self.__host, self.__session_id, execution_id, last_update_time
         )
 
         self.__catch_response_error(response, FetchFlowExecutionUpdatesError)
@@ -743,12 +668,7 @@ class Azkaban(object):
         self.__check_if_logged()
 
         response = api.fetch_executions_of_a_flow_request(
-            self.__session,
-            self.__session_id,
-            project,
-            flow,
-            start,
-            length
+            self.__session, self.__session_id, project, flow, start, length
         )
 
         self.__catch_response_error(response, FetchExecutionsOfAFlowError)
@@ -778,13 +698,7 @@ class Azkaban(object):
 
         self.__check_if_logged()
         response = api.fetch_execution_job_log_request(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            execution_id,
-            jobid,
-            offset,
-            length
+            self.__session, self.__host, self.__session_id, execution_id, jobid, offset, length
         )
 
         self.__catch_response_error(response, FetchExecutionJobsLogError)
@@ -801,12 +715,7 @@ class Azkaban(object):
         """
         self.__check_if_logged()
 
-        response = api.resume_flow_execution(
-            self.__session,
-            self.__host,
-            self.__session_id,
-            execution_id
-        )
+        response = api.resume_flow_execution(self.__session, self.__host, self.__session_id, execution_id)
 
         self.__catch_response_error(response, ResumeFlowExecutionError, ignore_empty_responses=True)
 
@@ -838,5 +747,22 @@ class Azkaban(object):
         )
 
         self.__catch_response_error(response, FetchRunningExecutionsOfAFlowError)
+
+        return response.json()
+
+    def pause_a_flow_execution(self, exec_id):
+        """Pause a flow execution for the Azkaban API
+
+        :param str exec_id: The Execution id
+        :return: The response from the request made
+        :rtype: requests.Response
+        :raises PauseAFlowExecutionError: when Azkaban api returns error in response
+        """
+
+        self.__check_if_logged()
+
+        response = api.pause_flow_execution(self.__session, self.__host, self.__session_id, self.__exec_id)
+
+        self.__catch_response_error(response, PauseAFlowExecutionError)
 
         return response.json()
