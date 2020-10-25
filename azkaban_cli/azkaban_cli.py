@@ -33,6 +33,7 @@ from azkaban_cli.exceptions import (
     FetchExecutionJobsLogError,
     ResumeFlowExecutionError,
     FetchRunningExecutionsOfAFlowError,
+    PauseAFlowExecutionError,
 )
 from azkaban_cli.__version__ import __version__
 
@@ -160,7 +161,7 @@ def __unschedule(ctx, project, flow):
 
 @login_required
 def __execute(ctx, project, flow, **execution_options):
-    azkaban = ctx.obj[u'azkaban']
+    azkaban = ctx.obj[u"azkaban"]
 
     try:
         azkaban.execute(project, flow, **execution_options)
@@ -215,7 +216,7 @@ def __delete(ctx, project):
 
             try:
                 schedule = azkaban.fetch_schedule(project_id, flow_name)
-            except:
+            except Exception:
                 logging.debug("Schedule not found")
                 schedule = None
 
@@ -519,6 +520,17 @@ def _fetch_running_executions_of_a_flow(ctx, project, flow):
         logging.error(str(e))
 
 
+@login_required
+def __pause_a_flow_execution(ctx, exec_id):
+    azkaban = ctx.obj[u"azkaban"]
+
+    try:
+        azkaban.pause_flow_execution(exec_id)
+        logging.info("Flow successfully paused")
+    except PauseAFlowExecutionError as e:
+        logging.error(str(e))
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # Interface
 # ----------------------------------------------------------------------------------------------------------------------
@@ -604,32 +616,75 @@ def unschedule(ctx, project, flow):
 
 @click.command(u"execute")
 @click.pass_context
-@click.argument(u'project', type=click.STRING)
-@click.argument(u'flow', type=click.STRING)
-@click.option(u'--disabled', type=click.STRING, help=u'A list of job names that should be disabled for this execution. Should be formatted as a JSON Array String. Example Values: ["job_name_1", "job_name_2", "job_name_N"]')
-@click.option(u'--success-emails', type=click.STRING, help=u'A list of emails to be notified if the execution succeeds. All emails are delimitted with [,|;|\s+]. Example Values: foo@email.com,bar@email.com')
-@click.option(u'--failure-emails', type=click.STRING, help=u'A list of emails to be notified if the execution fails. All emails are delimitted with [,|;|\s+]. Example Values: foo@email.com,bar@email.com')
-@click.option(u'--success-emails-override/--no-success-emails-override', help=u'Whether uses system default email settings to override successEmails.')
-@click.option(u'--failure-emails-override/--no-failure-emails-override', help=u'Whether uses system default email settings to override failureEmails.')
-@click.option(u'--notify-failure-first/--no-notify-failure-first', help=u'Whether sends out email notifications as long as the first failure occurs.')
-@click.option(u'--notify-failure-last/--no-notify-failure-last', help=u'Whether sends out email notifications as long as the last failure occurs.')
-@click.option(u'--failure-action', type=click.STRING, help=u'If a failure occurs, how should the execution behaves. Possible Values: finishCurrent, cancelImmediately, finishPossible')
-@click.option(u'--concurrent-option', type=click.STRING, help=u'If you wanna specify concurrent option for scheduling flow. Possible values: ignore, pipeline, skip')
-def execute(ctx, project, flow, disabled, success_emails, failure_emails,
-            success_emails_override, failure_emails_override, notify_failure_first,
-            notify_failure_last, failure_action, concurrent_option):
+@click.argument(u"project", type=click.STRING)
+@click.argument(u"flow", type=click.STRING)
+@click.option(
+    u"--disabled",
+    type=click.STRING,
+    help=u'A list of job names that should be disabled for this execution. Should be formatted as a JSON Array String. Example Values: ["job_name_1", "job_name_2", "job_name_N"]',
+)
+@click.option(
+    u"--success-emails",
+    type=click.STRING,
+    help=r"A list of emails to be notified if the execution succeeds. All emails are delimitted with [,|;|\s+]. Example Values: foo@email.com,bar@email.com",
+)
+@click.option(
+    u"--failure-emails",
+    type=click.STRING,
+    help=r"A list of emails to be notified if the execution fails. All emails are delimitted with [,|;|\s+]. Example Values: foo@email.com,bar@email.com",
+)
+@click.option(
+    u"--success-emails-override/--no-success-emails-override",
+    help=u"Whether uses system default email settings to override successEmails.",
+)
+@click.option(
+    u"--failure-emails-override/--no-failure-emails-override",
+    help=u"Whether uses system default email settings to override failureEmails.",
+)
+@click.option(
+    u"--notify-failure-first/--no-notify-failure-first",
+    help=u"Whether sends out email notifications as long as the first failure occurs.",
+)
+@click.option(
+    u"--notify-failure-last/--no-notify-failure-last",
+    help=u"Whether sends out email notifications as long as the last failure occurs.",
+)
+@click.option(
+    u"--failure-action",
+    type=click.STRING,
+    help=u"If a failure occurs, how should the execution behaves. Possible Values: finishCurrent, cancelImmediately, finishPossible",
+)
+@click.option(
+    u"--concurrent-option",
+    type=click.STRING,
+    help=u"If you wanna specify concurrent option for scheduling flow. Possible values: ignore, pipeline, skip",
+)
+def execute(
+    ctx,
+    project,
+    flow,
+    disabled,
+    success_emails,
+    failure_emails,
+    success_emails_override,
+    failure_emails_override,
+    notify_failure_first,
+    notify_failure_last,
+    failure_action,
+    concurrent_option,
+):
     """Execute a flow from a project"""
 
     execution_options = {
-        'disabled': disabled,
-        'successEmails': success_emails,
-        'failureEmails': failure_emails,
-        'successEmailsOverride': success_emails_override,
-        'failureEmailsOverride': failure_emails_override,
-        'notifyFailureFirst': notify_failure_first,
-        'notifyFailureLast': notify_failure_last,
-        'failureAction': failure_action,
-        'concurrentOption': concurrent_option,
+        "disabled": disabled,
+        "successEmails": success_emails,
+        "failureEmails": failure_emails,
+        "successEmailsOverride": success_emails_override,
+        "failureEmailsOverride": failure_emails_override,
+        "notifyFailureFirst": notify_failure_first,
+        "notifyFailureLast": notify_failure_last,
+        "failureAction": failure_action,
+        "concurrentOption": concurrent_option,
     }
     __execute(ctx, project, flow, **execution_options)
 
