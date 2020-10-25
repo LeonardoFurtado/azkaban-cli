@@ -598,3 +598,23 @@ def fetch_running_executions_of_a_flow_request(session, host, session_id, projec
     logging.debug("Response: \n%s", response.text)
 
     return response
+
+
+def pause_a_flow_execution(session, host, session_id, exec_id):
+    """Pause a flow execution for the Azkaban API
+
+    :param session: A session for creating the request
+    :param str host: Hostname where the request should go
+    :param str session_id: An id that the user should have when is logged in
+    :param str exec_id: Execution id to be fetched
+    :return: The response from the request made
+    :rtype: requests.Response
+    :raises requests.exceptions.ConnectionError: if cannot connect to host
+    """
+    response = session.get(
+        host + "/executor", params={u"session.id": session_id, u"ajax": "pauseFlow", u"execid": exec_id}
+    )
+
+    logging.debug("Response: \n%s", response.text)
+
+    return response
