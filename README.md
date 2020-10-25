@@ -34,9 +34,9 @@ Commands:
   add_permission                      Add a group with permission in a project
   change_permission                   Change a group permission in a project
   create                              Create a new project
+  cancel                              Cancel a flow execution
   delete                              Delete a project
   execute                             Execute a flow from a project
-  cancel                              Cancel a flow execution
   fetch_running_executions_of_a_flow  Fetch the running executions of a flow
   fetch_flow_execution                Fetch a flow execution
   fetch_flow_execution_updates        Fetch flow execution updates
@@ -47,6 +47,7 @@ Commands:
   fetch_sla                           Fetch the SLA from a schedule
   login                               Login to an Azkaban server
   logout                              Logout from Azkaban session
+  pause_a_flow_execution              Pause a flow execution
   remove_permission                   Remove group permission from a project
   schedule                            Schedule a flow from a project with specified cron...
   unschedule                          Unschedule a flow from a project
